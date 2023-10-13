@@ -31,6 +31,7 @@ main()
     userinit();      // first user process
     __sync_synchronize();
     started = 1;
+    printf("epoch :%d seconds \n", GoldFish__rtc__get__time());
   } else {
     while(started == 0)
       ;
@@ -43,3 +44,10 @@ main()
 
   scheduler();        
 }
+uint64
+GoldFish__rtc__get__time(void){
+    uint64* epoch_pnt = (uint64*) 0x101000;
+    uint64 epoch_value = *epoch_pnt / (1000000000);
+    return epoch_value;
+}
+
