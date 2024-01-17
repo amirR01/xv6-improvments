@@ -21,12 +21,18 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+} kmem[NCPU];
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  for (int i=0;i<NCPU;i++) {
+    char lock_name[5];
+    snprintf(lock_name, 5, "kmem%d", i);
+    initlock(&kmem[i].lock, lock_name);
+  }
+  // it will allocate all free pages to the first cpu,
+  // so it will be so probable that other cpu's have to steal from him.
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -56,10 +62,14 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  push_off();
+  int cpu_id = cpuid();
+  pop_off();
+
+  acquire(&kmem[cpu_id].lock);
+  r->next = kmem[cpu_id].freelist;
+  kmem[cpu_id].freelist = r;
+  release(&kmem[cpu_id].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -70,13 +80,63 @@ kalloc(void)
 {
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+  push_off();
+  int cpu_id = cpuid();
+  pop_off();
+
+  acquire(&kmem[cpu_id].lock);
+
+  if(!kmem[cpu_id].freelist){
+    for (int i=0;i<NCPU;i++) {
+      if (i == cpu_id) continue;
+      acquire(&kmem[i].lock);
+      if(kmem[i].freelist && kmem[i].freelist->next){
+        kmem[cpu_id].freelist = kmem[i].freelist->next;
+        // split the freelist into 2 equal lists
+        splitLinkedList(i);
+        release(&kmem[i].lock);
+        break;
+      }
+      release(&kmem[i].lock);
+    }
+    ;
+  }
+
+  r = kmem[cpu_id].freelist;
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+    kmem[cpu_id].freelist = r->next;
+  release(&kmem[cpu_id].lock);
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+void splitLinkedList(int i)
+{
+  struct run *my_cpu_linker = kmem[i].freelist->next;
+  struct run *other_cpu_linker = kmem[i].freelist;
+  for (;;)
+  {
+    if (other_cpu_linker)
+    {
+      if (other_cpu_linker->next)
+      {
+        other_cpu_linker->next = other_cpu_linker->next->next;
+      }
+      other_cpu_linker = other_cpu_linker->next;
+    }
+    if (my_cpu_linker)
+    {
+      if (my_cpu_linker->next)
+      {
+        my_cpu_linker->next = my_cpu_linker->next->next;
+      }
+      my_cpu_linker = my_cpu_linker->next;
+    }
+    if ((!my_cpu_linker) && (!other_cpu_linker))
+    {
+      break;
+    }
+  }
 }
