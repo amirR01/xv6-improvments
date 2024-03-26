@@ -6,7 +6,7 @@ Improvements to the xv6 operating system for the Operating Systems course at Sha
     - Add your name to the shell before the $ sign.
     - Write a function to get the current time using GoldFish RTC.
 - **Links**:
-    - [Answer](github.com/AmirHosein-Gharaati/xv6-improvments/blob/main/WH1.md)
+    - [Answer](https://github.com/amirR01/xv6-improvments/tree/Start)
     - [Answer explanation(in Persian)](github.com/AmirHosein-Gharaati/xv6-improvments/blob/main/WH1-Explanation.md)
 
 ## System calls
