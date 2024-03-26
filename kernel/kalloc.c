@@ -23,6 +23,8 @@ struct {
   struct run *freelist;
 } kmem;
 
+uint8 references_counts[128*1024*1024 >> PGSHIFT] = {0};
+
 void
 kinit()
 {
@@ -51,6 +53,15 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  if(references_counts[((uint64)pa - (uint64)end) >> PGSHIFT] > 0)
+  {
+  references_counts[((uint64)pa - (uint64)end) >> PGSHIFT] -= 1;
+  if(references_counts[((uint64)pa - (uint64)end) >> PGSHIFT] > 0)
+    {
+    return;
+    }
+  }
+
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -60,6 +71,12 @@ kfree(void *pa)
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
+}
+
+// increase the reference count for the physical page
+void
+kcopy(void *pa){
+  references_counts[((uint64)pa - (uint64)end) >> PGSHIFT] += 1;
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -76,7 +93,9 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    references_counts[((uint64)r - (uint64)end) >> PGSHIFT] = 1;
+  }
   return (void*)r;
 }

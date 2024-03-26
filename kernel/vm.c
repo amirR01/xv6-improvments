@@ -308,28 +308,59 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
-
+  
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+    if (*pte & PTE_W) {
+      *pte = *pte | PTE_COW;
+      *pte = *pte & ~(PTE_W);
+    }
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
+    kcopy((void*)pa);
   }
   return 0;
 
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
+}
+// the function will copy the data to new pa if the page is COW
+int copyonwrite(pagetable_t pagetable, uint64 va){
+    if (va >= MAXVA){
+      // not a valid address
+      return -1;
+    }
+    pte_t *pte = walk(pagetable, va, 0);
+    if (pte == 0){
+      // not a valid address
+      return -1;
+    }
+    if ((*pte & PTE_U) == 0 || (*pte & PTE_V) == 0 ){
+      // not a valid address
+      return -1;
+    }
+    if ((*pte & PTE_COW) == 0){
+      // not a COW page
+      return -1;
+    }
+    uint64 pa = PTE2PA(*pte); // get the physical address
+    uint64 new_pa = (uint64)kalloc(); // allocate a new page
+    if (new_pa == 0){
+      // out of memory
+      return -1;
+    }
+    memmove((char*)new_pa, (char*)pa, PGSIZE); // copy the data
+    kfree((void*)pa); // free the old page
+    uint flags = PTE_FLAGS(*pte);
+    *pte = (PA2PTE(new_pa) | flags | PTE_W) & ~(PTE_COW); // update flags
+    return 0;
 }
 
 // mark a PTE invalid for user access.
@@ -358,6 +389,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    if(copyonwrite(pagetable,va0) == 0){
+      // copy on write
+      pa0 = walkaddr(pagetable, va0);
+      }
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
