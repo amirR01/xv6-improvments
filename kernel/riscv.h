@@ -326,6 +326,12 @@ sfence_vma()
   // the zero, zero means flush all TLB entries.
   asm volatile("sfence.vma zero, zero");
 }
+// wait for interrupt
+static inline void
+wfi()
+{
+    asm volatile("wfi");
+}
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
