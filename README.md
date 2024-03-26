@@ -53,3 +53,10 @@ Improvements to the xv6 operating system for the Operating Systems course at Sha
     - [MIT 6.S081 Fall 2022 Lab](https://pdos.csail.mit.edu/6.S081/2022/labs/lock.html)
     - [Answer explanation(in Persian)](github.com/AmirHosein-Gharaati/xv6-improvments/blob/main/WH6-Explanation.md)
 
+## Performance
+- **Needs**:
+    - Improve the performance of the xv6 operating system by making it intrrupt driven.
+
+- **Links**:
+    - [Answer](github.com/AmirHosein-Gharaati/xv6-improvments/blob/main/WH7.md)
+    - [Answer explanation(in Persian)](github.com/AmirHosein-Gharaati/xv6-improvments/blob/main/WH7-Explanation.md)
